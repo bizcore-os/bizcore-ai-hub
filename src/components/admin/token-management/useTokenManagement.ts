@@ -12,7 +12,9 @@ export const useTokenManagement = () => {
     totalUsers: 0,
     totalTokensIssued: 0,
     totalTokensConsumed: 0,
-    averageUsage: 0
+    averageUsage: 0,
+    activeTrialUsers: 0,
+    totalDailyTokensUsed: 0
   });
   const [userTokens, setUserTokens] = useState<UserToken[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<TokenTransaction[]>([]);
@@ -49,11 +51,23 @@ export const useTokenManagement = () => {
       const totalTokensConsumed = usersData?.reduce((sum, user) => sum + (user.used_tokens || 0), 0) || 0;
       const averageUsage = totalUsers > 0 ? totalTokensConsumed / totalUsers : 0;
 
+      // Calculate trial users and daily token usage
+      const currentDate = new Date();
+      const activeTrialUsers = usersData?.filter(user => {
+        if (!user.trial_end_date) return false;
+        const trialEndDate = new Date(user.trial_end_date);
+        return currentDate <= trialEndDate;
+      }).length || 0;
+
+      const totalDailyTokensUsed = usersData?.reduce((sum, user) => sum + (user.daily_tokens_used || 0), 0) || 0;
+
       setTokenStats({
         totalUsers,
         totalTokensIssued,
         totalTokensConsumed,
-        averageUsage: Math.round(averageUsage)
+        averageUsage: Math.round(averageUsage),
+        activeTrialUsers,
+        totalDailyTokensUsed
       });
 
       // Calculate available tokens for each user
@@ -167,6 +181,32 @@ export const useTokenManagement = () => {
     }
   };
 
+  const resetDailyTokens = async () => {
+    try {
+      // Call the reset function for daily tokens
+      const { error } = await supabase.rpc('reset_daily_tokens');
+      
+      if (error) {
+        console.error('Error resetting daily tokens:', error);
+        throw error;
+      }
+      
+      toast({
+        title: "Success",
+        description: "Daily tokens reset successfully for trial users",
+      });
+      
+      await fetchTokenStats();
+    } catch (error) {
+      console.error('Error resetting daily tokens:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reset daily tokens",
+        variant: "destructive"
+      });
+    }
+  };
+
   const resetMonthlyTokens = async () => {
     try {
       // Call the reset function
@@ -206,6 +246,7 @@ export const useTokenManagement = () => {
     recentTransactions,
     fetchTokenStats,
     adjustUserTokens,
+    resetDailyTokens,
     resetMonthlyTokens
   };
 };
